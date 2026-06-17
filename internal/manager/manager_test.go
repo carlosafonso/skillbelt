@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/elfonsi/skillbelt/internal/config"
+	"github.com/carlosafonso/skillbelt/internal/config"
 )
 
 // fakeGitDir returns the absolute path to testdata/fakegit so tests can
@@ -348,26 +348,144 @@ func TestList_BrokenSymlink(t *testing.T) {
 
 func TestNormalizeURL(t *testing.T) {
 	cases := []struct {
-		input    string
-		wantURL  string
-		wantName string
+		input         string
+		wantCloneURL  string
+		wantSourceURL string
+		wantName      string
+		wantSubdir    string
+		wantBranch    string
 	}{
-		{"github.com/u/repo", "https://github.com/u/repo", "repo"},
-		{"github.com/u/repo.git", "https://github.com/u/repo.git", "repo"},
-		{"https://github.com/u/repo", "https://github.com/u/repo", "repo"},
-		{"https://github.com/u/repo.git", "https://github.com/u/repo.git", "repo"},
-		{"github.com/u/repo/", "https://github.com/u/repo", "repo"},
-		{"git@github.com:u/repo.git", "git@github.com:u/repo.git", "repo"},
+		// Whole-repo installs: cloneURL == sourceURL, no subdir.
+		{
+			input:         "github.com/u/repo",
+			wantCloneURL:  "https://github.com/u/repo",
+			wantSourceURL: "https://github.com/u/repo",
+			wantName:      "repo",
+		},
+		{
+			input:         "github.com/u/repo.git",
+			wantCloneURL:  "https://github.com/u/repo.git",
+			wantSourceURL: "https://github.com/u/repo.git",
+			wantName:      "repo",
+		},
+		{
+			input:         "https://github.com/u/repo",
+			wantCloneURL:  "https://github.com/u/repo",
+			wantSourceURL: "https://github.com/u/repo",
+			wantName:      "repo",
+		},
+		{
+			input:         "https://github.com/u/repo.git",
+			wantCloneURL:  "https://github.com/u/repo.git",
+			wantSourceURL: "https://github.com/u/repo.git",
+			wantName:      "repo",
+		},
+		{
+			input:         "github.com/u/repo/",
+			wantCloneURL:  "https://github.com/u/repo",
+			wantSourceURL: "https://github.com/u/repo",
+			wantName:      "repo",
+		},
+		{
+			input:         "git@github.com:u/repo.git",
+			wantCloneURL:  "git@github.com:u/repo.git",
+			wantSourceURL: "git@github.com:u/repo.git",
+			wantName:      "repo",
+		},
+		// GitHub subdirectory installs.
+		{
+			input:         "https://github.com/u/monorepo/tree/main/skills/my-skill",
+			wantCloneURL:  "https://github.com/u/monorepo",
+			wantSourceURL: "https://github.com/u/monorepo/tree/main/skills/my-skill",
+			wantName:      "my-skill",
+			wantSubdir:    "skills/my-skill",
+			wantBranch:    "main",
+		},
+		{
+			input:         "github.com/u/monorepo/tree/v2/a/b/c",
+			wantCloneURL:  "https://github.com/u/monorepo",
+			wantSourceURL: "https://github.com/u/monorepo/tree/v2/a/b/c",
+			wantName:      "c",
+			wantSubdir:    "a/b/c",
+			wantBranch:    "v2",
+		},
 	}
 
 	for _, tc := range cases {
-		gotURL, gotName := normalizeURL(tc.input)
-		if gotURL != tc.wantURL {
-			t.Errorf("normalizeURL(%q) url = %q, want %q", tc.input, gotURL, tc.wantURL)
+		got := normalizeURL(tc.input)
+		if got.cloneURL != tc.wantCloneURL {
+			t.Errorf("normalizeURL(%q) cloneURL = %q, want %q", tc.input, got.cloneURL, tc.wantCloneURL)
 		}
-		if gotName != tc.wantName {
-			t.Errorf("normalizeURL(%q) name = %q, want %q", tc.input, gotName, tc.wantName)
+		if got.sourceURL != tc.wantSourceURL {
+			t.Errorf("normalizeURL(%q) sourceURL = %q, want %q", tc.input, got.sourceURL, tc.wantSourceURL)
 		}
+		if got.name != tc.wantName {
+			t.Errorf("normalizeURL(%q) name = %q, want %q", tc.input, got.name, tc.wantName)
+		}
+		if got.subdir != tc.wantSubdir {
+			t.Errorf("normalizeURL(%q) subdir = %q, want %q", tc.input, got.subdir, tc.wantSubdir)
+		}
+		if got.branch != tc.wantBranch {
+			t.Errorf("normalizeURL(%q) branch = %q, want %q", tc.input, got.branch, tc.wantBranch)
+		}
+	}
+}
+
+func TestInstall_GitHubSubdir(t *testing.T) {
+	m, logFile := newTestManager(t)
+
+	const rawURL = "https://github.com/rmyndharis/antigravity-skills/tree/main/skills/airflow-dag-patterns"
+	if err := m.Install(rawURL); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	// Symlink should exist and point into the subdir.
+	link := filepath.Join(m.cfg.SkillsDir, "airflow-dag-patterns")
+	fi, err := os.Lstat(link)
+	if err != nil {
+		t.Fatalf("symlink not created: %v", err)
+	}
+	if fi.Mode()&os.ModeSymlink == 0 {
+		t.Error("expected a symlink")
+	}
+	target, err := os.Readlink(link)
+	if err != nil {
+		t.Fatalf("readlink: %v", err)
+	}
+	wantTarget := filepath.Join(m.cfg.ReposDir, "airflow-dag-patterns", "skills", "airflow-dag-patterns")
+	if target != wantTarget {
+		t.Errorf("symlink target = %q, want %q", target, wantTarget)
+	}
+
+	// Lock file should record the original URL.
+	lock, err := readLock(m.cfg.LockFile)
+	if err != nil {
+		t.Fatalf("readLock: %v", err)
+	}
+	e, ok := lock.Skills["airflow-dag-patterns"]
+	if !ok {
+		t.Fatal("airflow-dag-patterns not in lock")
+	}
+	if e.URL != rawURL {
+		t.Errorf("URL = %q, want %q", e.URL, rawURL)
+	}
+
+	// Fake git should have been called for clone then sparse-checkout.
+	calls := gitLog(t, logFile)
+	var hasClone, hasSparse bool
+	for _, c := range calls {
+		if strings.Contains(c, "clone") {
+			hasClone = true
+		}
+		if strings.Contains(c, "sparse-checkout") {
+			hasSparse = true
+		}
+	}
+	if !hasClone {
+		t.Error("expected git clone call")
+	}
+	if !hasSparse {
+		t.Error("expected git sparse-checkout call")
 	}
 }
 

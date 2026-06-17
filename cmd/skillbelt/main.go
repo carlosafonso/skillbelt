@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/elfonsi/skillbelt/internal/config"
-	"github.com/elfonsi/skillbelt/internal/manager"
+	"github.com/carlosafonso/skillbelt/internal/config"
+	"github.com/carlosafonso/skillbelt/internal/manager"
 )
 
 func main() {

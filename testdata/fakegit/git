@@ -7,18 +7,32 @@ echo "$@" >> "$LOGFILE"
 
 case "$1" in
   clone)
-    # git clone --depth=1 <url> <dest>
+    # git clone [flags...] <url> <dest>
     for DEST in "$@"; do :; done  # POSIX way to get last argument
     mkdir -p "$DEST"
     echo "fake-cloned" > "$DEST/SKILL.md"
     ;;
   -C)
-    # git -C <dir> pull
+    # git -C <dir> <subcommand> [args...]
     DIR="$2"
-    if [ ! -d "$DIR" ]; then
-      echo "error: not a git repository" >&2
-      exit 1
-    fi
+    SUBCMD="$3"
+    case "$SUBCMD" in
+      pull)
+        if [ ! -d "$DIR" ]; then
+          echo "error: not a git repository" >&2
+          exit 1
+        fi
+        ;;
+      sparse-checkout)
+        # git -C <dir> sparse-checkout set <subdir>
+        SUBDIR="$5"
+        mkdir -p "$DIR/$SUBDIR"
+        ;;
+      *)
+        echo "fakegit: unknown -C subcommand: $SUBCMD" >&2
+        exit 1
+        ;;
+    esac
     ;;
   *)
     echo "fakegit: unknown command: $*" >&2

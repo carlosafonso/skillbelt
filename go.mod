@@ -1,4 +1,4 @@
-module github.com/elfonsi/skillbelt
+module github.com/carlosafonso/skillbelt
 
 go 1.25.0
 
