@@ -1,0 +1,28 @@
+#!/bin/sh
+# Fake git for tests. Records calls and simulates side effects.
+# Usage: called by manager tests via PATH injection.
+
+LOGFILE="${FAKEGIT_LOG:-/tmp/fakegit.log}"
+echo "$@" >> "$LOGFILE"
+
+case "$1" in
+  clone)
+    # git clone --depth=1 <url> <dest>
+    DEST="${@: -1}"
+    mkdir -p "$DEST"
+    echo "fake-cloned" > "$DEST/SKILL.md"
+    ;;
+  -C)
+    # git -C <dir> pull
+    DIR="$2"
+    if [ ! -d "$DIR" ]; then
+      echo "error: not a git repository" >&2
+      exit 1
+    fi
+    ;;
+  *)
+    echo "fakegit: unknown command: $*" >&2
+    exit 1
+    ;;
+esac
+exit 0
