@@ -8,7 +8,7 @@ echo "$@" >> "$LOGFILE"
 case "$1" in
   clone)
     # git clone --depth=1 <url> <dest>
-    DEST="${@: -1}"
+    for DEST in "$@"; do :; done  # POSIX way to get last argument
     mkdir -p "$DEST"
     echo "fake-cloned" > "$DEST/SKILL.md"
     ;;
