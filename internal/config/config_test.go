@@ -21,11 +21,8 @@ func TestLoad_Defaults(t *testing.T) {
 	if !strings.HasPrefix(cfg.SkillsDir, home) {
 		t.Errorf("SkillsDir %q should be under home dir", cfg.SkillsDir)
 	}
-	if !strings.Contains(cfg.SkillsDir, ".agents") {
-		t.Errorf("SkillsDir %q should contain .agents", cfg.SkillsDir)
-	}
-	if !strings.HasSuffix(cfg.SkillsDir, filepath.Join(".agents", "skills")) {
-		t.Errorf("SkillsDir %q should end with .agents/skills", cfg.SkillsDir)
+	if !strings.HasSuffix(cfg.SkillsDir, filepath.Join(".gemini", "config", "skills")) {
+		t.Errorf("SkillsDir %q should end with .gemini/config/skills", cfg.SkillsDir)
 	}
 	if !strings.Contains(cfg.ReposDir, ".skillbelt") {
 		t.Errorf("ReposDir %q should contain .skillbelt", cfg.ReposDir)

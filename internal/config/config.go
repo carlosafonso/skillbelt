@@ -22,7 +22,7 @@ func Load() (Config, error) {
 		skillbeltHome = v
 	}
 
-	skillsDir := filepath.Join(home, ".agents", "skills")
+	skillsDir := filepath.Join(home, ".gemini", "config", "skills")
 	if v := os.Getenv("SKILLBELT_SKILLS_DIR"); v != "" {
 		skillsDir = v
 	}
