@@ -6,6 +6,19 @@ By default skillbelt targets [Antigravity](https://antigravity.google). Support 
 
 ## Installation
 
+**Homebrew (macOS and Linux):**
+
+```
+brew tap carlosafonso/skillbelt
+brew install skillbelt
+```
+
+If you see `Error: Refusing to load formula ... from untrusted tap`, run:
+
+```
+brew trust carlosafonso/skillbelt
+```
+
 **Download a release binary** (Linux and macOS, amd64 and arm64):
 
 Download the archive for your platform from the [releases page](https://github.com/carlosafonso/skillbelt/releases), extract it, and move the binary to somewhere on your `PATH`.
