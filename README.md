@@ -77,6 +77,32 @@ skillbelt remove <name>           # removes the symlink, keeps the local clone
 skillbelt remove <name> --purge   # removes the symlink and the local clone
 ```
 
+## Development
+
+### Running tests
+
+```
+go test ./...
+```
+
+Or via Make:
+
+```
+make test
+```
+
+### Git hooks
+
+A pre-commit hook that runs the test suite is provided in `scripts/pre-commit`. Install it once after cloning:
+
+```
+make install-hooks
+```
+
+### CI
+
+Tests run automatically on every push and pull request targeting `main` via GitHub Actions.
+
 ## Configuration
 
 | Environment variable    | Default                      | Description                        |
