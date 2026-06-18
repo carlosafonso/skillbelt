@@ -17,7 +17,11 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
-	skillbeltHome := filepath.Join(home, ".skillbelt")
+	xdgConfigHome := os.Getenv("XDG_CONFIG_HOME")
+	if xdgConfigHome == "" {
+		xdgConfigHome = filepath.Join(home, ".config")
+	}
+	skillbeltHome := filepath.Join(xdgConfigHome, "skillbelt")
 	if v := os.Getenv("SKILLBELT_HOME"); v != "" {
 		skillbeltHome = v
 	}

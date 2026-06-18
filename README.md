@@ -108,4 +108,4 @@ Tests run automatically on every push and pull request targeting `main` via GitH
 | Environment variable    | Default                      | Description                        |
 |-------------------------|------------------------------|------------------------------------|
 | `SKILLBELT_SKILLS_DIR`  | `~/.gemini/config/skills`    | Where skill symlinks are created   |
-| `SKILLBELT_HOME`        | `~/.skillbelt`               | Where repos and the lock file live |
+| `SKILLBELT_HOME`        | `$XDG_CONFIG_HOME/skillbelt` (default: `~/.config/skillbelt`) | Where repos and the lock file live |
