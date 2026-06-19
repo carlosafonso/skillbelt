@@ -35,6 +35,9 @@ func (m *Manager) Install(rawURL string) (err error) {
 	}
 
 	// 1. Process Lock Process Synchronization
+	if err := os.MkdirAll(filepath.Dir(m.cfg.LockFile), 0o755); err != nil {
+		return fmt.Errorf("create lock directory: %w", err)
+	}
 	fileLock := flock.New(m.cfg.LockFile + ".lock")
 	if err := fileLock.Lock(); err != nil {
 		return fmt.Errorf("acquire install lock: %w", err)
@@ -112,6 +115,9 @@ func (m *Manager) Install(rawURL string) (err error) {
 
 func (m *Manager) Remove(name string, purge bool) error {
 	// Process Lock Process Synchronization
+	if err := os.MkdirAll(filepath.Dir(m.cfg.LockFile), 0o755); err != nil {
+		return fmt.Errorf("create lock directory: %w", err)
+	}
 	fileLock := flock.New(m.cfg.LockFile + ".lock")
 	if err := fileLock.Lock(); err != nil {
 		return fmt.Errorf("acquire remove lock: %w", err)
@@ -159,6 +165,9 @@ func (m *Manager) Update(name string) error {
 	}
 
 	// Process Lock Process Synchronization
+	if err := os.MkdirAll(filepath.Dir(m.cfg.LockFile), 0o755); err != nil {
+		return fmt.Errorf("create lock directory: %w", err)
+	}
 	fileLock := flock.New(m.cfg.LockFile + ".lock")
 	if err := fileLock.Lock(); err != nil {
 		return fmt.Errorf("acquire update lock: %w", err)

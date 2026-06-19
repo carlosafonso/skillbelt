@@ -96,6 +96,29 @@ func TestInstall_Happy(t *testing.T) {
 	}
 }
 
+func TestInstall_MissingLockDir(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.Config{
+		SkillsDir: filepath.Join(dir, "skills"),
+		ReposDir:  filepath.Join(dir, "repos"),
+		LockFile:  filepath.Join(dir, "nonexistent-dir", "installed.json"),
+	}
+	t.Setenv("PATH", fakeGitDir(t)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	logFile := filepath.Join(dir, "fakegit.log")
+	t.Setenv("FAKEGIT_LOG", logFile)
+
+	m := New(cfg)
+	if err := m.Install("github.com/user/my-skill"); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	// Symlink should exist.
+	link := filepath.Join(m.cfg.SkillsDir, "my-skill")
+	if _, err := os.Lstat(link); err != nil {
+		t.Errorf("symlink not created: %v", err)
+	}
+}
+
 func TestInstall_AlreadyInstalled(t *testing.T) {
 	m, _ := newTestManager(t)
 
