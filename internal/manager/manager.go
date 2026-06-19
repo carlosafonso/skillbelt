@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gofrs/flock"
+
 	"github.com/carlosafonso/skillbelt/internal/config"
 )
 
@@ -27,12 +29,32 @@ type ListEntry struct {
 	Linked      bool
 }
 
-func (m *Manager) Install(rawURL string) error {
+func (m *Manager) Install(rawURL string) (err error) {
 	if _, err := exec.LookPath("git"); err != nil {
 		return errors.New("git not found in PATH — install git and try again")
 	}
 
+	// 1. Process Lock Process Synchronization
+	fileLock := flock.New(m.cfg.LockFile + ".lock")
+	if err := fileLock.Lock(); err != nil {
+		return fmt.Errorf("acquire install lock: %w", err)
+	}
+	defer func() {
+		_ = fileLock.Unlock()
+	}()
+
 	pURL := normalizeURL(rawURL)
+
+	// 2. Setup Transactional Rollback Stack (LIFO)
+	var rollbacks []func()
+	success := false
+	defer func() {
+		if !success {
+			for i := len(rollbacks) - 1; i >= 0; i-- {
+				rollbacks[i]()
+			}
+		}
+	}()
 
 	lock, err := readLock(m.cfg.LockFile)
 	if err != nil {
@@ -46,6 +68,8 @@ func (m *Manager) Install(rawURL string) error {
 	if err := os.MkdirAll(m.cfg.ReposDir, 0o755); err != nil {
 		return fmt.Errorf("create repos dir: %w", err)
 	}
+
+	// Git clone/checkout phase
 	if pURL.subdir != "" {
 		if err := gitCloneSparse(pURL.cloneURL, repoDir, pURL.branch, pURL.subdir); err != nil {
 			return fmt.Errorf("clone %s: %w", pURL.cloneURL, err)
@@ -55,6 +79,10 @@ func (m *Manager) Install(rawURL string) error {
 			return fmt.Errorf("clone %s: %w", pURL.cloneURL, err)
 		}
 	}
+	// Register rollback for git clone
+	rollbacks = append(rollbacks, func() {
+		_ = os.RemoveAll(repoDir)
+	})
 
 	if err := os.MkdirAll(m.cfg.SkillsDir, 0o755); err != nil {
 		return fmt.Errorf("create skills dir: %w", err)
@@ -65,21 +93,33 @@ func (m *Manager) Install(rawURL string) error {
 	}
 	link := filepath.Join(m.cfg.SkillsDir, pURL.name)
 	if err := os.Symlink(symlinkTarget, link); err != nil {
-		// Roll back the clone so state stays consistent.
-		_ = os.RemoveAll(repoDir)
 		return fmt.Errorf("create symlink: %w", err)
 	}
+	// Register rollback for symlink
+	rollbacks = append(rollbacks, func() {
+		_ = os.Remove(link)
+	})
 
 	lock.Skills[pURL.name] = Entry{URL: pURL.sourceURL, InstalledAt: time.Now().UTC()}
 	if err := lock.write(m.cfg.LockFile); err != nil {
 		return fmt.Errorf("write lock: %w", err)
 	}
 
+	success = true
 	fmt.Printf("installed %s (%s)\n", pURL.name, pURL.sourceURL)
 	return nil
 }
 
 func (m *Manager) Remove(name string, purge bool) error {
+	// Process Lock Process Synchronization
+	fileLock := flock.New(m.cfg.LockFile + ".lock")
+	if err := fileLock.Lock(); err != nil {
+		return fmt.Errorf("acquire remove lock: %w", err)
+	}
+	defer func() {
+		_ = fileLock.Unlock()
+	}()
+
 	lock, err := readLock(m.cfg.LockFile)
 	if err != nil {
 		return fmt.Errorf("read lock: %w", err)
@@ -118,6 +158,15 @@ func (m *Manager) Update(name string) error {
 		return errors.New("git not found in PATH — install git and try again")
 	}
 
+	// Process Lock Process Synchronization
+	fileLock := flock.New(m.cfg.LockFile + ".lock")
+	if err := fileLock.Lock(); err != nil {
+		return fmt.Errorf("acquire update lock: %w", err)
+	}
+	defer func() {
+		_ = fileLock.Unlock()
+	}()
+
 	lock, err := readLock(m.cfg.LockFile)
 	if err != nil {
 		return fmt.Errorf("read lock: %w", err)
@@ -147,6 +196,8 @@ func (m *Manager) Update(name string) error {
 }
 
 func (m *Manager) List() ([]ListEntry, error) {
+	// Readers do not strictly need exclusive locks since lock.write is atomic (via tempfile + rename),
+	// meaning os.ReadFile will always get a consistent representation of the JSON data.
 	lock, err := readLock(m.cfg.LockFile)
 	if err != nil {
 		return nil, fmt.Errorf("read lock: %w", err)
@@ -155,7 +206,9 @@ func (m *Manager) List() ([]ListEntry, error) {
 	entries := make([]ListEntry, 0, len(lock.Skills))
 	for name, e := range lock.Skills {
 		link := filepath.Join(m.cfg.SkillsDir, name)
-		_, statErr := os.Lstat(link)
+		// Use os.Stat instead of Lstat so that we verify the target directory actually exists.
+		// If the symlink exists but points to a deleted directory, Linked will be false.
+		_, statErr := os.Stat(link)
 		entries = append(entries, ListEntry{
 			Name:        name,
 			URL:         e.URL,

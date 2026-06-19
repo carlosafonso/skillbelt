@@ -1,10 +1,12 @@
 package manager
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/carlosafonso/skillbelt/internal/config"
@@ -509,4 +511,73 @@ func TestGitNotFound(t *testing.T) {
 	if !strings.Contains(err.Error(), "git not found") {
 		t.Errorf("error = %q, want 'git not found'", err.Error())
 	}
+}
+
+func TestInstall_RollbackOnLockfileWriteFailure(t *testing.T) {
+	m, _ := newTestManager(t)
+
+	// Make the LockFile a directory so that lock.write() fails on os.WriteFile
+	if err := os.MkdirAll(m.cfg.LockFile, 0o755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	err := m.Install("github.com/user/rollback-skill")
+	if err == nil {
+		t.Fatal("expected install to fail on lockfile write, got nil")
+	}
+
+	// Verify that the symlink does NOT exist
+	link := filepath.Join(m.cfg.SkillsDir, "rollback-skill")
+	if _, err := os.Lstat(link); !os.IsNotExist(err) {
+		t.Errorf("symlink should have been rolled back and deleted, but exists: %v", err)
+	}
+
+	// Verify that the repository directory does NOT exist
+	repoDir := filepath.Join(m.cfg.ReposDir, "rollback-skill")
+	if _, err := os.Stat(repoDir); !os.IsNotExist(err) {
+		t.Errorf("repository directory should have been rolled back and deleted, but exists: %v", err)
+	}
+}
+
+func TestInstall_ConcurrentSafety(t *testing.T) {
+	m, _ := newTestManager(t)
+
+	// Run concurrent installs and removes to verify lock contention is handled gracefully.
+	// Since we mock git clone, these will return quickly.
+	const numGoroutines = 10
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			defer wg.Done()
+			skillName := fmt.Sprintf("skill-%d", id)
+			rawURL := "github.com/user/" + skillName
+
+			// Attempt install
+			if err := m.Install(rawURL); err != nil {
+				t.Errorf("concurrent Install of %q failed: %v", skillName, err)
+				return
+			}
+
+			// Verify it got recorded in lock and linked
+			entries, err := m.List()
+			if err != nil {
+				t.Errorf("List failed: %v", err)
+				return
+			}
+			found := false
+			for _, e := range entries {
+				if e.Name == skillName {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("expected skill %q to be in list", skillName)
+			}
+		}(i)
+	}
+
+	wg.Wait()
 }
