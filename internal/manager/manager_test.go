@@ -325,25 +325,53 @@ func TestList_WithEntries(t *testing.T) {
 }
 
 func TestList_BrokenSymlink(t *testing.T) {
-	m, _ := newTestManager(t)
+	t.Run("broken symlink (target deleted)", func(t *testing.T) {
+		m, _ := newTestManager(t)
 
-	if err := m.Install("github.com/user/skill-a"); err != nil {
-		t.Fatalf("install: %v", err)
-	}
-	// Manually remove the symlink to simulate a broken state.
-	link := filepath.Join(m.cfg.SkillsDir, "skill-a")
-	os.Remove(link)
+		if err := m.Install("github.com/user/skill-a"); err != nil {
+			t.Fatalf("install: %v", err)
+		}
+		// Manually remove the target repository directory to make the symlink broken.
+		repoDir := filepath.Join(m.cfg.ReposDir, "skill-a")
+		if err := os.RemoveAll(repoDir); err != nil {
+			t.Fatalf("failed to remove repo dir: %v", err)
+		}
 
-	entries, err := m.List()
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
-	if len(entries) != 1 {
-		t.Fatalf("expected 1 entry, got %d", len(entries))
-	}
-	if entries[0].Linked {
-		t.Error("Linked should be false when symlink is missing")
-	}
+		entries, err := m.List()
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		if len(entries) != 1 {
+			t.Fatalf("expected 1 entry, got %d", len(entries))
+		}
+		if entries[0].Linked {
+			t.Error("Linked should be false when symlink target is deleted (broken symlink)")
+		}
+	})
+
+	t.Run("missing symlink", func(t *testing.T) {
+		m, _ := newTestManager(t)
+
+		if err := m.Install("github.com/user/skill-a"); err != nil {
+			t.Fatalf("install: %v", err)
+		}
+		// Manually remove the symlink itself so it is completely missing.
+		link := filepath.Join(m.cfg.SkillsDir, "skill-a")
+		if err := os.Remove(link); err != nil {
+			t.Fatalf("failed to remove symlink: %v", err)
+		}
+
+		entries, err := m.List()
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		if len(entries) != 1 {
+			t.Fatalf("expected 1 entry, got %d", len(entries))
+		}
+		if entries[0].Linked {
+			t.Error("Linked should be false when symlink itself is missing")
+		}
+	})
 }
 
 // --- URL normalization (unit tests on the pure function) ---
