@@ -28,6 +28,20 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
+brews:
+  - name: skillbelt
+    repository:
+      owner: carlosafonso
+      name: homebrew-skillbelt
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/carlosafonso/skillbelt"
+    description: "A package manager for agent skills"
+    install: |
+      bin.install "skillbelt"
+    test: |
+      system "#{bin}/skillbelt", "--help"
+
 release:
   github:
     owner: carlosafonso
